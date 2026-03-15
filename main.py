@@ -3,7 +3,7 @@ import requests
 
 app = FastAPI()
 
-BOT_TOKEN = "BOT_TOKEN_CUA_BAN"
+BOT_TOKEN = "2593478870267479601:sBlndTwWqpZNMUEFxJoNJdoUevWTSbZVKYXpoHHEmYRKHmVOMdRrUCHywdWUgWHt"
 
 @app.post("/webhook")
 async def webhook(request: Request):
@@ -18,18 +18,24 @@ async def webhook(request: Request):
 
         reply = f"Game Master đã nhận: {text} (+100 XP)"
 
-        url = "https://openapi.zalo.me/v2.0/oa/message"
+        url = "https://bot-api.zapps.me/v1/message/send"
 
         payload = {
-            "recipient": {"user_id": user_id},
-            "message": {"text": reply}
+            "recipient": {
+                "user_id": user_id
+            },
+            "message": {
+                "text": reply
+            }
         }
 
         headers = {
-            "access_token": "2593478870267479601:sBlndTwWqpZNMUEFxJoNJdoUevWTSbZVKYXpoHHEmYRKHmVOMdRrUCHywdWUgWHt",
+            "Authorization": f"Bearer {BOT_TOKEN}",
             "Content-Type": "application/json"
         }
 
-        requests.post(url, json=payload, headers=headers)
+        r = requests.post(url, json=payload, headers=headers)
+
+        print("ZALO SEND RESULT:", r.text)
 
     return {"status": "ok"}
