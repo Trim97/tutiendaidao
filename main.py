@@ -18,19 +18,15 @@ async def webhook(request: Request):
 
         reply = f"Game Master đã nhận: {text} (+100 XP)"
 
-        url = "https://bot-api.zapps.me/v1/message/send"
+        url = "https://openapi.zalo.me/v3.0/oa/message/cs"
 
         payload = {
-            "recipient": {
-                "user_id": user_id
-            },
-            "message": {
-                "text": reply
-            }
+            "recipient": {"user_id": user_id},
+            "message": {"text": reply}
         }
 
         headers = {
-            "Authorization": f"Bearer {BOT_TOKEN}",
+            "access_token": BOT_TOKEN,
             "Content-Type": "application/json"
         }
 
