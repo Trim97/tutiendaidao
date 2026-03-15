@@ -7,9 +7,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     await update.message.reply_text(f"Game Master nhận: {text} (+100 XP)")
 
-app = ApplicationBuilder().token(TOKEN).build()
-
-app.add_handler(MessageHandler(filters.TEXT, handle))
+def main():
+    app = ApplicationBuilder().token(TOKEN).build()
+    app.add_handler(MessageHandler(filters.TEXT, handle))
+    app.run_polling()
 
 if __name__ == "__main__":
-    app.run_polling()
+    main()
