@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
@@ -15,7 +13,7 @@ async def webhook(data: dict):
     message = str(data)
 
     if "chạy" in message:
-        reply = "Thiếu hiệp đã hoàn thành thử luyện Chạy. Tu vi +100."
+        reply = "Thiếu hiệp đã hoàn thành thử luyện chạy. Tu vi +100."
 
     elif "đọc" in message:
         reply = "Luyện trí thành công. Tu vi tăng thêm."
@@ -23,4 +21,7 @@ async def webhook(data: dict):
     else:
         reply = "Thiên cơ khó dò. Bản tọa chưa hiểu ý ngươi."
 
-    return JSONResponse({"reply": reply})
+    return JSONResponse(
+        content={"reply": reply},
+        media_type="application/json; charset=utf-8"
+    )
