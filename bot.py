@@ -1,24 +1,32 @@
+import os
 import json
 import math
+import random
 import datetime
-import asyncio
 
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import (
+ApplicationBuilder,
+CommandHandler,
+ContextTypes
+)
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from openai import OpenAI
 
+# ========================
+# CONFIG
+# ========================
 
-TOKEN = "8642929480:AAH3oeIRu-NSYp5ulQdxf1NEUebZRIh5Z7E"
-import os
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY")
-)
+client = OpenAI(api_key=OPENAI_KEY)
 
 DATA_FILE = "players.json"
 
+# ========================
+# QUEST LIST
+# ========================
 
 QUESTS = [
 "Chạy",
@@ -28,279 +36,347 @@ QUESTS = [
 "Đọc sách ở thư viện",
 "Làm game roblox",
 "Ngủ đúng giờ",
-"Review ngày cũ"
+"Review ngày"
 ]
 
+# ========================
+# EVENTS
+# ========================
 
-# =====================
+EVENTS = [
+"Ngươi gặp một lão giả bí ẩn truyền công (+150 XP)",
+"Ngộ đạo dưới cổ thụ (+1 streak)",
+"Tâm ma xuất hiện (A +5)",
+"Khám phá bí cảnh (+200 XP)",
+"Không có dị tượng hôm nay"
+]
+
+# ========================
 # DATA
-# =====================
+# ========================
 
-def load():
-    try:
-        with open(DATA_FILE) as f:
-            return json.load(f)
-    except:
-        return {}
+players = {}
 
-def save():
+def load_data():
+    global players
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE,"r") as f:
+            players=json.load(f)
+
+def save_data():
     with open(DATA_FILE,"w") as f:
         json.dump(players,f)
 
-players = load()
-
+# ========================
+# PLAYER
+# ========================
 
 def get_player(uid):
 
-    uid = str(uid)
+    uid=str(uid)
 
     if uid not in players:
 
-        players[uid] = {
-            "xp":0,
-            "level":1,
-            "A":200,
-            "streak":0,
-            "last_day":"",
-            "quests_done":[]
+        players[uid]={
+        "xp":0,
+        "level":1,
+        "A":200,
+        "streak":0,
+        "last_day":"",
+        "quests_done":[],
+        "history":[]
         }
 
     return players[uid]
 
-
-# =====================
-# LEVEL
-# =====================
-
-def B(level):
-    return 1.5 + math.floor(level/50)*0.1
-
-
-def xp_need(p):
-    return int(p["A"]*(p["level"]**B(p["level"])))
-
-
-def level_up(p):
-
-    while p["xp"] >= xp_need(p):
-
-        p["xp"] -= xp_need(p)
-
-        p["level"] += 1
-
-        p["A"] += 10*p["level"]
-
-
-# =====================
-# REALM
-# =====================
-
-realms = [
-"Trúc Cơ","Kết Đan","Nguyên Anh","Hoá Thần",
-"Luyện Hư","Hợp Thể","Đại Thừa","Độ Kiếp",
-"Chân Tiên","Kim Tiên","Thái Ất Ngọc Tiên",
-"Đại La","Đạo Tổ","Thiên Đạo","Thiên Đế","Đại Đế"
-]
-
+# ========================
+# REALM SYSTEM
+# ========================
 
 def realm(level):
 
-    if level <= 100:
-        return f"Luyện Khí tầng {(level-1)//10+1}"
+    if level<=100:
+        stage=(level-1)//10+1
+        return f"Luyện Khí tầng {stage}"
 
-    level -= 100
-    r = level//100
+    realms=[
+    "Trúc Cơ",
+    "Kết Đan",
+    "Nguyên Anh",
+    "Hoá Thần",
+    "Luyện Hư",
+    "Hợp Thể",
+    "Đại Thừa"
+    ]
 
-    phase = level%100
+    index=(level-101)//100
 
-    if phase < 30:
-        p = "Sơ Kỳ"
-    elif phase < 60:
-        p = "Trung Kỳ"
-    elif phase < 90:
-        p = "Hậu Kỳ"
-    else:
-        p = "Đỉnh Phong"
+    if index<len(realms):
+        return realms[index]
 
-    return f"{realms[r]} {p}"
+    return "Tiên nhân"
 
+# ========================
+# LEVEL SYSTEM
+# ========================
 
-# =====================
+def xp_needed(p):
+
+    level=p["level"]
+    A=p["A"]
+
+    B=1.5+(level//50)*0.1
+
+    return int(A*(level**B))
+
+def check_level(p):
+
+    need=xp_needed(p)
+
+    while p["xp"]>=need:
+
+        p["xp"]-=need
+        p["level"]+=1
+        p["A"]+=10*p["level"]
+
+        need=xp_needed(p)
+
+# ========================
+# RANDOM EVENT
+# ========================
+
+def random_event(p):
+
+    e=random.choice(EVENTS)
+
+    if "+150 XP" in e:
+        p["xp"]+=150
+
+    elif "+200 XP" in e:
+        p["xp"]+=200
+
+    elif "+1 streak" in e:
+        p["streak"]+=1
+
+    elif "A +5" in e:
+        p["A"]+=5
+
+    return e
+
+# ========================
 # AI GAME MASTER
-# =====================
+# ========================
 
-def ai_message(player):
+def ai_message(p):
 
-    prompt = f"""
-Ngươi là một HỆ THỐNG TU TIÊN cổ xưa.
+    history="\n".join(p["history"][-5:])
 
-Phong cách nói chuyện:
-- Văn phong tiên hiệp Trung Hoa
-- Trang nghiêm
-- Có thể trích thơ cổ hoặc tự sáng tác thơ
-- Giống hệ thống trong truyện tu tiên
+    prompt=f"""
+Ngươi là một hệ thống tu tiên cổ xưa.
+
+Phong cách:
+- văn phong tiên hiệp
+- trang nghiêm
+- đôi khi viết thơ cổ
 
 Thông tin tu sĩ:
 
-Cảnh giới: {realm(player["level"])}
-Level: {player["level"]}
-Streak tu luyện: {player["streak"]}
+Cảnh giới: {realm(p["level"])}
+Level: {p["level"]}
+Streak: {p["streak"]}
 
-Hãy:
+Lịch sử tu luyện gần đây:
+{history}
 
-1. Giao nhiệm vụ hôm nay
-2. Động viên tu luyện
-3. Thỉnh thoảng viết 1-2 câu thơ cổ phong
-
-Nhiệm vụ hôm nay:
-
-1. Chạy
-2. Tập bụng
-3. Dọn dẹp nhà cửa
-4. Làm video youtube
-5. Đọc sách ở thư viện
-6. Làm game roblox
-7. Ngủ đúng giờ
-8. Review ngày
-
-Hãy viết như một thông báo từ HỆ THỐNG TU TIÊN.
+Hãy động viên tu luyện hôm nay.
 """
 
-    r = client.chat.completions.create(
-        model="gpt-5-nano",
-        messages=[{"role":"user","content":prompt}]
+    r=client.chat.completions.create(
+    model="gpt-5-nano",
+    messages=[{"role":"user","content":prompt}]
     )
 
     return r.choices[0].message.content
 
-
-# =====================
+# ========================
 # COMMANDS
-# =====================
+# ========================
 
 async def start(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
-    p = get_player(update.effective_user.id)
+    p=get_player(update.effective_user.id)
 
-    msg = ai_message(p)
+    text=f"""
+【Hệ thống tu tiên khởi động】
 
-    await update.message.reply_text(msg)
-
-
-async def profile(update:Update,context:ContextTypes.DEFAULT_TYPE):
-
-    p = get_player(update.effective_user.id)
-
-    text = f"""
 Cảnh giới: {realm(p["level"])}
 Level: {p["level"]}
-XP: {p["xp"]}/{xp_need(p)}
 
-Streak: {p["streak"]}
-Hệ số A: {p["A"]}
+Dùng /quests xem nhiệm vụ
 """
 
     await update.message.reply_text(text)
 
+# ========================
 
-async def quest(update:Update,context:ContextTypes.DEFAULT_TYPE):
+async def quests(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
-    text="Nhiệm vụ hôm nay:\n\n"
+    p=get_player(update.effective_user.id)
+
+    text="📜 Nhiệm vụ hôm nay\n\n"
 
     for i,q in enumerate(QUESTS):
-        text+=f"{i+1}. {q}\n"
 
-    text+="\nHoàn thành: /done số"
+        if i in p["quests_done"]:
+            text+=f"✅ {i+1}. {q}\n"
+        else:
+            text+=f"{i+1}. {q}\n"
 
     await update.message.reply_text(text)
 
+# ========================
 
 async def done(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
-    p = get_player(update.effective_user.id)
+    p=get_player(update.effective_user.id)
 
-    q = int(context.args[0])-1
-
-    if q in p["quests_done"]:
-        await update.message.reply_text("Quest đã hoàn thành.")
+    if not context.args:
+        await update.message.reply_text("/done số nhiệm vụ")
         return
 
-    today = str(datetime.date.today())
+    q=int(context.args[0])-1
 
-    if p["last_day"]!=today:
-
-        if p["last_day"] == str(datetime.date.today()-datetime.timedelta(days=1)):
-            p["streak"]+=1
-        else:
-            p["streak"]=1
-
-        p["last_day"]=today
-        p["quests_done"]=[]
+    if q in p["quests_done"]:
+        await update.message.reply_text("Đã hoàn thành rồi")
+        return
 
     p["quests_done"].append(q)
 
-    bonus = p["streak"]*p["streak"]*p["level"]
+    xp=100
 
-    gain = 100 + bonus
+    today=str(datetime.date.today())
 
-    p["xp"]+=gain
+    if p["last_day"]==today:
+        p["streak"]+=1
+    else:
+        p["streak"]=1
+
+    p["last_day"]=today
+
+    bonus=p["streak"]*p["streak"]*p["level"]
+
+    total=xp+bonus
+
+    p["xp"]+=total
 
     p["A"]-=1
 
-    level_up(p)
+    log=f"{today} - Hoàn thành {QUESTS[q]}"
+    p["history"].append(log)
 
-    save()
+    check_level(p)
 
-    await update.message.reply_text(f"+{gain} XP")
+    save_data()
 
+    await update.message.reply_text(
+    f"Hoàn thành {QUESTS[q]}\nXP +{total}"
+    )
 
-# =====================
+# ========================
+
+async def stats(update:Update,context:ContextTypes.DEFAULT_TYPE):
+
+    p=get_player(update.effective_user.id)
+
+    text=f"""
+📊 Thông tin tu luyện
+
+Cảnh giới: {realm(p["level"])}
+Level: {p["level"]}
+XP: {p["xp"]}
+A: {p["A"]}
+Streak: {p["streak"]}
+"""
+
+    await update.message.reply_text(text)
+
+# ========================
+
+async def history(update:Update,context:ContextTypes.DEFAULT_TYPE):
+
+    p=get_player(update.effective_user.id)
+
+    if not p["history"]:
+        await update.message.reply_text("Chưa có lịch sử")
+        return
+
+    text="📜 Nhật ký tu luyện\n\n"
+
+    for h in p["history"][-10:]:
+        text+=h+"\n"
+
+    await update.message.reply_text(text)
+
+# ========================
 # DAILY RESET
-# =====================
+# ========================
 
-async def daily_reset(app):
-
-    for uid in players:
-
-        players[uid]["quests_done"]=[]
-
-    save()
+async def daily_reset(context:ContextTypes.DEFAULT_TYPE):
 
     for uid in players:
 
-        p = players[uid]
+        p=players[uid]
 
-        msg = ai_message(p)
+        p["quests_done"]=[]
 
-        await app.bot.send_message(uid,msg)
+        event=random_event(p)
 
+        try:
 
-# =====================
+            msg=f"""
+🌅 Thiên đạo dị tượng
+
+{event}
+
+Nhiệm vụ mới đã xuất hiện
+"""
+
+            ai=ai_message(p)
+
+            await context.bot.send_message(
+            chat_id=int(uid),
+            text=msg+"\n"+ai
+            )
+
+        except:
+            pass
+
+    save_data()
+
+# ========================
 # MAIN
-# =====================
+# ========================
 
 def main():
 
-    app = ApplicationBuilder().token(TOKEN).build()
+    load_data()
+
+    app=ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start",start))
-    app.add_handler(CommandHandler("profile",profile))
-    app.add_handler(CommandHandler("quest",quest))
+    app.add_handler(CommandHandler("quests",quests))
     app.add_handler(CommandHandler("done",done))
+    app.add_handler(CommandHandler("stats",stats))
+    app.add_handler(CommandHandler("history",history))
 
-    scheduler = AsyncIOScheduler()
-
-    scheduler.add_job(
-        daily_reset,
-        "cron",
-        hour=6,
-        args=[app]
+    app.job_queue.run_daily(
+    daily_reset,
+    time=datetime.time(hour=6,minute=0)
     )
 
-    scheduler.start()
+    print("BOT STARTED")
 
     app.run_polling()
-
 
 if __name__=="__main__":
     main()
