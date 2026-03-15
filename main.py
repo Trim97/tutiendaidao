@@ -1,27 +1,35 @@
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request
+import requests
 
 app = FastAPI()
 
-@app.get("/")
-def home():
-    return {"message": "Game Master đã thức tỉnh"}
+BOT_TOKEN = "BOT_TOKEN_CUA_BAN"
 
 @app.post("/webhook")
-async def webhook(data: dict):
+async def webhook(request: Request):
 
-    message = str(data)
+    data = await request.json()
 
-    if "chạy" in message:
+    user_id = data["sender"]["id"]
+    message = data["message"]["text"]
+
+    if "chạy" in message.lower():
         reply = "Thiếu hiệp đã hoàn thành thử luyện chạy. Tu vi +100."
-
-    elif "đọc" in message:
-        reply = "Luyện trí thành công. Tu vi tăng thêm."
-
     else:
-        reply = "Thiên cơ khó dò. Bản tọa chưa hiểu ý ngươi."
+        reply = "Thiên cơ khó dò."
 
-    return JSONResponse(
-        content={"reply": reply},
-        media_type="application/json; charset=utf-8"
-    )
+    url = "https://openapi.zalo.me/v2.0/oa/message"
+
+    payload = {
+        "recipient": {"user_id": user_id},
+        "message": {"text": reply}
+    }
+
+    headers = {
+        "access_token": BOT_TOKEN,
+        "Content-Type": "application/json"
+    }
+
+    requests.post(url, json=payload, headers=headers)
+
+    return {"status": "ok"}
