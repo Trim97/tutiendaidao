@@ -14,7 +14,7 @@ TOKEN = "8642929480:AAH3oeIRu-NSYp5ulQdxf1NEUebZRIh5Z7E"
 import os
 
 client = OpenAI(
-    api_key=os.getenv("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")
+    api_key=os.getenv("OPENAI_API_KEY")
 )
 
 DATA_FILE = "players.json"
