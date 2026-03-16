@@ -373,22 +373,22 @@ User: {text}
 
     reply = ai_call(prompt)
 
-if not reply:
-    reply = "Thiên cơ hỗn loạn... tạm thời không thể suy diễn."
+    if not reply:
+        reply = "Thiên cơ hỗn loạn... tạm thời không thể suy diễn."
 
-cur.execute("SELECT level FROM player WHERE chat_id=%s",(chat_id,))
-level = cur.fetchone()[0]
+    cur.execute("SELECT level FROM player WHERE chat_id=%s",(chat_id,))
+    level = cur.fetchone()[0]
 
-realm = get_realm(level)
+    realm = get_realm(level)
 
-poem = cultivation_poem(level,realm)
+    poem = cultivation_poem(level,realm)
 
-if not poem:
-    poem = "Tu đạo vô tận, đạo tâm bất diệt."
+    if not poem:
+        poem = "Tu đạo vô tận, đạo tâm bất diệt."
 
-message = reply + "\n\n" + poem
+    message = reply + "\n\n" + poem
 
-update.message.reply_text(message)
+    update.message.reply_text(message)
 # =====================
 # BOT START
 # =====================
