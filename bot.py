@@ -427,7 +427,6 @@ def handle(update, context):
     user_text = update.message.text
 
     try:
-
         response = client.chat.completions.create(
             model="gpt-5-nano",
             messages=[
@@ -440,8 +439,10 @@ def handle(update, context):
         reply = response.choices[0].message.content
 
     except Exception as e:
+        print("OPENAI ERROR:", str(e))
+        import traceback
+        traceback.print_exc()
 
-        print("OPENAI ERROR:", e)
         reply = "Thiên cơ hỗn loạn... ta tạm thời không thể suy diễn."
 
     update.message.reply_text(reply)
