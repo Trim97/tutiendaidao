@@ -122,28 +122,11 @@ def ai_call(prompt, tokens=200):
 
         r = client.responses.create(
             model="gpt-5-nano",
-            input=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt}
-                    ]
-                }
-            ],
+            input=prompt,
             max_output_tokens=tokens
         )
 
-        if r.output_text:
-            return r.output_text
-
-        # fallback đọc thủ công
-        for item in r.output:
-            if item.type == "message":
-                for c in item.content:
-                    if c.type == "output_text":
-                        return c.text
-
-        return "Thiên cơ vẫn chưa hiện..."
+        return r.output_text
 
     except Exception as e:
         print("OPENAI ERROR:", e)
