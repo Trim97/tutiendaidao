@@ -431,5 +431,3 @@ scheduler.add_job(heavenly_warning, "interval", hours=3)
 
 scheduler.start()
 
-updater.start_polling(drop_pending_updates=True)
-updater.idle()
