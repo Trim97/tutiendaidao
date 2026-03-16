@@ -128,24 +128,23 @@ def ai_call(prompt, tokens=200):
             max_output_tokens=tokens
         )
 
-        text = ""
+        text=""
 
-        if r.output:
-            for item in r.output:
-                if item.type == "message":
-                    for c in item.content:
-                        if c.type == "output_text":
-                            text += c.text
+        for item in r.output:
+            if item.type=="message":
+                for c in item.content:
+                    if c.type=="output_text":
+                        text+=c.text
 
         return text.strip()
 
     except Exception as e:
 
-        print("OPENAI ERROR:", e)
         import traceback
+        err = str(e)
         traceback.print_exc()
 
-        return None
+        return f"⚠️ OPENAI ERROR:\n{err}"
 
 
 def breakthrough_story(old_level, new_level, realm):
