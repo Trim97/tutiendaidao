@@ -3,6 +3,7 @@ import math
 import random
 import requests
 import psycopg2
+import pytz
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from telegram.ext import Updater, MessageHandler, Filters
@@ -12,13 +13,11 @@ from openai import OpenAI
 # CONFIG
 # =====================
 
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
-YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
-CHANNEL_ID = os.getenv("YOUTUBE_CHANNEL_ID")
+TOKEN = os.environ["TELEGRAM_TOKEN"]
+DATABASE_URL = os.environ["DATABASE_URL"]
+OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
+YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY")
+CHANNEL_ID = os.environ.get("YOUTUBE_CHANNEL_ID")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -28,6 +27,7 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 conn = psycopg2.connect(DATABASE_URL, sslmode="require")
 cur = conn.cursor()
+
 
 def init_db():
 
@@ -51,15 +51,6 @@ def init_db():
     """)
 
     cur.execute("""
-    CREATE TABLE IF NOT EXISTS side_quests(
-    id SERIAL PRIMARY KEY,
-    chat_id TEXT,
-    quest TEXT,
-    done BOOLEAN
-    )
-    """)
-
-    cur.execute("""
     CREATE TABLE IF NOT EXISTS youtube_stats(
     chat_id TEXT,
     subs INT,
@@ -77,6 +68,7 @@ init_db()
 
 def xp_needed(level,A,B):
     return A*(level**B)
+
 
 def add_xp(chat_id,xp):
 
@@ -97,6 +89,7 @@ realms=[
 "Chân Tiên","Kim Tiên","Thái Ất Ngọc Tiên",
 "Đại La","Đạo Tổ","Thiên Đạo","Thiên Đế","Đại Đế"
 ]
+
 
 def get_realm(level):
 
@@ -120,45 +113,42 @@ def get_realm(level):
     return realms[index]+" "+phase
 
 # =====================
-# CULTIVATION NARRATIVE
+# AI SYSTEM
 # =====================
+
+def ai_call(prompt,tokens=120):
+
+    r=client.responses.create(
+        model="gpt-5-nano",
+        input=prompt,
+        max_output_tokens=tokens
+    )
+
+    return r.output_text
+
 
 def breakthrough_story(old_level,new_level,realm):
 
     prompt=f"""
 Viết thông báo đột phá cảnh giới tiên hiệp.
-
 Level cũ {old_level}
 Level mới {new_level}
 Cảnh giới {realm}
-
-Phong cách cổ phong, 3 câu tối đa.
+3 câu tối đa.
 """
 
-    r=client.responses.create(
-        model="gpt-5-nano",
-        input=prompt,
-        max_output_tokens=80
-    )
+    return ai_call(prompt,80)
 
-    return r.output_text
 
 def cultivation_poem(level,realm):
 
     prompt=f"""
 Viết 2 câu thơ tiên hiệp.
-
 Level {level}
 Cảnh giới {realm}
 """
 
-    r=client.responses.create(
-        model="gpt-5-nano",
-        input=prompt,
-        max_output_tokens=40
-    )
-
-    return r.output_text
+    return ai_call(prompt,40)
 
 # =====================
 # LEVEL CHECK
@@ -200,7 +190,7 @@ def check_level(chat_id,context=None):
             context.bot.send_message(chat_id=chat_id,text=story)
 
 # =====================
-# DAILY QUEST
+# QUEST SYSTEM
 # =====================
 
 daily_quests=[
@@ -213,6 +203,7 @@ daily_quests=[
 "ngủ đúng giờ",
 "review ngày cũ"
 ]
+
 
 def reset_daily():
 
@@ -234,64 +225,36 @@ def reset_daily():
     conn.commit()
 
 # =====================
-# LLM QUEST PARSER
+# QUEST PARSER
 # =====================
 
 def detect_quest(text):
 
     prompt=f"""
-Danh sách quest:
+Quest list:
 {daily_quests}
 
-User nói:
+User message:
 {text}
 
-Nếu user hoàn thành quest nào
-trả đúng tên quest
-không thì trả NONE
+Return quest name or NONE
 """
 
-    r=client.responses.create(
-        model="gpt-5-nano",
-        input=prompt,
-        max_output_tokens=20
-    )
+    r=ai_call(prompt,20).lower().strip()
 
-    result=r.output_text.lower().strip()
-
-    if result in daily_quests:
-        return result
+    if r in daily_quests:
+        return r
 
     return None
-
-# =====================
-# AI CHAT
-# =====================
-
-def ai_chat(text):
-
-    prompt=f"""
-Bạn là hệ thống tu luyện tiên hiệp.
-
-Phong cách cổ phong.
-
-User:
-{text}
-"""
-
-    r=client.responses.create(
-        model="gpt-5-nano",
-        input=prompt,
-        max_output_tokens=120
-    )
-
-    return r.output_text
 
 # =====================
 # YOUTUBE SCAN
 # =====================
 
 def scan_youtube():
+
+    if not CHANNEL_ID:
+        return
 
     url=f"https://www.googleapis.com/youtube/v3/channels?part=statistics&id={CHANNEL_ID}&key={YOUTUBE_API_KEY}"
 
@@ -303,6 +266,7 @@ def scan_youtube():
     views=int(stats["viewCount"])
 
     cur.execute("SELECT chat_id FROM player")
+
     players=cur.fetchall()
 
     for p in players:
@@ -318,10 +282,7 @@ def scan_youtube():
 
             old_sub,old_view=row
 
-            add_sub=subs-old_sub
-            add_view=views-old_view
-
-            xp=(add_sub*10)+(add_view*10)
+            xp=(subs-old_sub)*10 + (views-old_view)*10
 
             add_xp(p[0],xp)
 
@@ -340,12 +301,13 @@ def scan_youtube():
     conn.commit()
 
 # =====================
-# THIÊN ĐẠO CẢNH BÁO
+# HEAVENLY DAO WARNING
 # =====================
 
 def heavenly_warning(context):
 
     cur.execute("SELECT chat_id FROM player")
+
     players=cur.fetchall()
 
     warnings=[
@@ -357,9 +319,10 @@ def heavenly_warning(context):
 
     for p in players:
 
-        msg=random.choice(warnings)
-
-        context.bot.send_message(chat_id=p[0],text=msg)
+        context.bot.send_message(
+        chat_id=p[0],
+        text=random.choice(warnings)
+        )
 
 # =====================
 # TELEGRAM MESSAGE
@@ -371,6 +334,7 @@ def handle(update,context):
     text=update.message.text.lower()
 
     cur.execute("SELECT * FROM player WHERE chat_id=%s",(chat_id,))
+
     p=cur.fetchone()
 
     if not p:
@@ -382,8 +346,6 @@ def handle(update,context):
 
         conn.commit()
 
-    # MONEY XP
-
     if "đồng" in text or "vnđ" in text:
 
         nums=[int(s) for s in text.split() if s.isdigit()]
@@ -392,8 +354,6 @@ def handle(update,context):
 
             add_xp(chat_id,nums[0])
             check_level(chat_id,context)
-
-    # QUEST PARSER
 
     quest=detect_quest(text)
 
@@ -406,9 +366,15 @@ def handle(update,context):
 
         conn.commit()
 
-    reply=ai_chat(text)
+    prompt=f"""
+Bạn là hệ thống tu luyện tiên hiệp.
+User: {text}
+"""
+
+    reply=ai_call(prompt)
 
     cur.execute("SELECT level FROM player WHERE chat_id=%s",(chat_id,))
+
     level=cur.fetchone()[0]
 
     realm=get_realm(level)
@@ -418,7 +384,7 @@ def handle(update,context):
     update.message.reply_text(reply+"\n\n"+poem)
 
 # =====================
-# START BOT
+# BOT START
 # =====================
 
 updater=Updater(TOKEN,use_context=True)
@@ -427,16 +393,16 @@ dp=updater.dispatcher
 
 dp.add_handler(MessageHandler(Filters.text,handle))
 
-scheduler=BackgroundScheduler()
+scheduler = BackgroundScheduler(timezone=pytz.timezone("Asia/Ho_Chi_Minh"))
 
-scheduler.add_job(scan_youtube,"cron",hour=21)
+scheduler.add_job(scan_youtube,"cron",hour=21,minute=0)
 
-scheduler.add_job(reset_daily,"cron",hour=0)
+scheduler.add_job(reset_daily,"cron",hour=0,minute=0)
 
 scheduler.add_job(heavenly_warning,"interval",hours=3)
 
 scheduler.start()
 
-updater.start_polling()
+updater.start_polling(drop_pending_updates=True)
 
 updater.idle()
