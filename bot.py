@@ -117,16 +117,29 @@ def get_realm(level):
 # AI SYSTEM
 # =====================
 
-def ai_call(prompt,tokens=120):
+def ai_call(prompt, tokens=120):
 
-    r=client.responses.create(
-        model="gpt-5-nano",
-        input=prompt,
-        max_output_tokens=tokens
-    )
+    try:
+        r = client.responses.create(
+            model="gpt-5-nano",
+            input=prompt,
+            max_output_tokens=tokens
+        )
 
-    return r.output_text
+        text = ""
 
+        if r.output:
+            for item in r.output:
+                if item.type == "message":
+                    for c in item.content:
+                        if c.type == "output_text":
+                            text += c.text
+
+        return text.strip()
+
+    except Exception as e:
+        print("AI ERROR:", e)
+        return None
 
 def breakthrough_story(old_level,new_level,realm):
 
