@@ -131,7 +131,7 @@ def ai_call(prompt, tokens=120):
 
     except Exception as e:
 
-        print("AI ERROR", e)
+        print("AI ERROR:", e)
 
         return None
 
