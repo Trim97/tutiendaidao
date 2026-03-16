@@ -127,7 +127,7 @@ def ai_call(prompt, tokens=200):
             reasoning={"effort":"low"}
         )
 
-        return r.output_text
+        return r.output[0].content[0].text
 
     except Exception as e:
         print("OPENAI ERROR:", str(e))
