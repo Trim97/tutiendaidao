@@ -304,24 +304,23 @@ def scan_youtube():
 # HEAVENLY DAO WARNING
 # =====================
 
-def heavenly_warning(context):
+def heavenly_warning():
 
     cur.execute("SELECT chat_id FROM player")
+    players = cur.fetchall()
 
-    players=cur.fetchall()
-
-    warnings=[
-    "Thiên đạo quan sát... hôm nay ngươi chưa tu luyện.",
-    "Đạo tâm nếu lười biếng, tu vi tất sẽ thụt lùi.",
-    "Linh khí trôi qua từng khắc, sao ngươi vẫn chưa hành công?",
-    "Thiên địa rộng lớn, kẻ chậm bước tất bị bỏ lại."
+    warnings = [
+        "Thiên đạo quan sát... hôm nay ngươi chưa tu luyện.",
+        "Đạo tâm nếu lười biếng, tu vi tất sẽ thụt lùi.",
+        "Linh khí trôi qua từng khắc, sao ngươi vẫn chưa hành công?",
+        "Thiên địa rộng lớn, kẻ chậm bước tất bị bỏ lại."
     ]
 
     for p in players:
 
-        context.bot.send_message(
-        chat_id=p[0],
-        text=random.choice(warnings)
+        updater.bot.send_message(
+            chat_id=p[0],
+            text=random.choice(warnings)
         )
 
 # =====================
