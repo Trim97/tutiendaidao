@@ -423,7 +423,6 @@ dispatcher = Dispatcher(bot, None, use_context=True)
 dispatcher.add_handler(MessageHandler(Filters.text, handle))
 
 def handle(update, context):
-
     user_text = update.message.text
 
     try:
