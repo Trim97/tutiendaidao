@@ -124,11 +124,8 @@ def ai_call(prompt, tokens=120):
         r = client.responses.create(
             model="gpt-5-nano",
             input=prompt,
-            max_output_tokens=tokens
+            max_output_tokens=400
         )
-
-        print("FULL RESPONSE:")
-        print(r)
 
         return r.output_text
 
