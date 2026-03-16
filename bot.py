@@ -425,7 +425,7 @@ def handle(update, context):
     try:
 
         response = client.chat.completions.create(
-            model="gpt-5-nano",
+            model="gpt-4.1-mini",
             messages=[
                 {"role": "system", "content": "Ngươi là một hệ thống tu tiên cổ xưa, nói chuyện văn phong tiên hiệp."},
                 {"role": "user", "content": user_text}
