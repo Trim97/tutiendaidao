@@ -405,32 +405,21 @@ User: {text}
 # BOT START
 # =====================
 
-updater=Updater(TOKEN,use_context=True)
+updater = Updater(TOKEN, use_context=True)
 
-dp=updater.dispatcher
-
-dp.add_handler(MessageHandler(Filters.text,handle))
+dp = updater.dispatcher
+dp.add_handler(MessageHandler(Filters.text, handle))
 
 scheduler = BackgroundScheduler(timezone=pytz.timezone("Asia/Ho_Chi_Minh"))
 
-scheduler.add_job(scan_youtube,"cron",hour=21,minute=0)
-
-scheduler.add_job(reset_daily,"cron",hour=0,minute=0)
-
-scheduler.add_job(heavenly_warning,"interval",hours=3)
+scheduler.add_job(scan_youtube, "cron", hour=21, minute=0)
+scheduler.add_job(reset_daily, "cron", hour=0, minute=0)
+scheduler.add_job(heavenly_warning, "interval", hours=3)
 
 scheduler.start()
 
 updater.start_polling(drop_pending_updates=True)
 updater.idle()
-
-while True:
-    try:
-        updater.start_polling(drop_pending_updates=True)
-        updater.idle()
-    except Exception as e:
-        print("BOT RESTART:", e)
-        time.sleep(5)
 
 
 # ============================================================
