@@ -405,21 +405,31 @@ User: {text}
 # BOT START
 # =====================
 
-updater = Updater(TOKEN, use_context=True)
+from flask import Flask, request
+import telegram
+from telegram.ext import Dispatcher
 
-dp = updater.dispatcher
-dp.add_handler(MessageHandler(Filters.text, handle))
+app = Flask(__name__)
 
-scheduler = BackgroundScheduler(timezone=pytz.timezone("Asia/Ho_Chi_Minh"))
+bot = telegram.Bot(token=TOKEN)
+dispatcher = Dispatcher(bot, None, use_context=True)
 
-scheduler.add_job(scan_youtube, "cron", hour=21, minute=0)
-scheduler.add_job(reset_daily, "cron", hour=0, minute=0)
-scheduler.add_job(heavenly_warning, "interval", hours=3)
+dispatcher.add_handler(MessageHandler(Filters.text, handle))
 
-scheduler.start()
+@app.route(f"/{TOKEN}", methods=["POST"])
+def webhook():
+    update = telegram.Update.de_json(request.get_json(force=True), bot)
+    dispatcher.process_update(update)
+    return "ok"
 
-updater.start_polling(drop_pending_updates=True)
-updater.idle()
+@app.route("/")
+def home():
+    return "bot running"
+
+if __name__ == "__main__":
+    bot.delete_webhook()
+    bot.set_webhook(url=f"tutiendaidao-production.up.railway.app/8642929480:AAH3oeIRu-NSYp5ulQdxf1NEUebZRIh5Z7E")
+    app.run(host="0.0.0.0", port=8000)
 
 
 # ============================================================
