@@ -123,23 +123,13 @@ def ai_call(prompt, tokens=200):
         r = client.responses.create(
             model="gpt-5-nano",
             input=prompt,
-            max_output_tokens=tokens,
-            reasoning={"effort": "low"}
+            max_output_tokens=tokens
         )
 
-        if hasattr(r, "output_text") and r.output_text:
-            return r.output_text
-
-        if r.output and len(r.output) > 0:
-            return r.output[0].content[0].text
-
-        return "Thiên cơ tĩnh lặng... chưa có hồi đáp."
+        return r.output_text
 
     except Exception as e:
-        print("OPENAI ERROR:", str(e))
-        import traceback
-        traceback.print_exc()
-
+        print("OPENAI ERROR:", e)
         return "Thiên cơ hỗn loạn... ta tạm thời không thể suy diễn."
 
 def breakthrough_story(old_level,new_level,realm):
