@@ -417,6 +417,7 @@ bot = telegram.Bot(token=TOKEN)
 app = Flask(__name__)
 
 dispatcher = Dispatcher(bot, None, use_context=True)
+dispatcher.add_handler(MessageHandler(Filters.text, handle))
 
 def handle(update, context):
 
@@ -425,7 +426,7 @@ def handle(update, context):
     try:
 
         response = client.chat.completions.create(
-            model="gpt-4.1-mini",
+            model="gpt-5-nano",
             messages=[
                 {"role": "system", "content": "Ngươi là một hệ thống tu tiên cổ xưa, nói chuyện văn phong tiên hiệp."},
                 {"role": "user", "content": user_text}
