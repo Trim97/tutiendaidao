@@ -120,16 +120,30 @@ def get_realm(level):
 def ai_call(prompt, tokens=200):
 
     try:
+
         r = client.responses.create(
             model="gpt-5-nano",
             input=prompt,
             max_output_tokens=tokens
         )
 
-        return r.output_text
+        # lấy text an toàn
+        if hasattr(r, "output_text") and r.output_text:
+            return r.output_text
+
+        # fallback nếu output_text rỗng
+        if r.output and len(r.output) > 0:
+            for item in r.output:
+                if item.type == "message":
+                    return item.content[0].text
+
+        return "Thiên cơ tạm thời vô thanh..."
 
     except Exception as e:
         print("OPENAI ERROR:", e)
+        import traceback
+        traceback.print_exc()
+
         return "Thiên cơ hỗn loạn... ta tạm thời không thể suy diễn."
 
 def breakthrough_story(old_level,new_level,realm):
