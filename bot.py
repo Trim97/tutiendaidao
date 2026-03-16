@@ -124,10 +124,16 @@ def ai_call(prompt, tokens=200):
             model="gpt-5-nano",
             input=prompt,
             max_output_tokens=tokens,
-            reasoning={"effort":"low"}
+            reasoning={"effort": "low"}
         )
 
-        return r.output[0].content[0].text
+        if hasattr(r, "output_text") and r.output_text:
+            return r.output_text
+
+        if r.output and len(r.output) > 0:
+            return r.output[0].content[0].text
+
+        return "Thiên cơ tĩnh lặng... chưa có hồi đáp."
 
     except Exception as e:
         print("OPENAI ERROR:", str(e))
