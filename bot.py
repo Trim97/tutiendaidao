@@ -405,32 +405,51 @@ User: {text}
 # BOT START
 # =====================
 
+import os
 from flask import Flask, request
 import telegram
-from telegram.ext import Dispatcher
+from telegram.ext import Dispatcher, MessageHandler, Filters
+
+TOKEN = "8642929480:AAH3oeIRu-NSYp5ulQdxf1NEUebZRIh5Z7E"
+
+bot = telegram.Bot(token=TOKEN)
 
 app = Flask(__name__)
 
-bot = telegram.Bot(token=TOKEN)
 dispatcher = Dispatcher(bot, None, use_context=True)
+
+def handle(update, context):
+    update.message.reply_text("Ta đã nghe ngươi nói.")
 
 dispatcher.add_handler(MessageHandler(Filters.text, handle))
 
+
+# 🔴 ROUTE NHẬN WEBHOOK TELEGRAM
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
     update = telegram.Update.de_json(request.get_json(force=True), bot)
     dispatcher.process_update(update)
     return "ok"
 
+
+# 🔴 ROUTE TEST SERVER
 @app.route("/")
 def home():
     return "bot running"
 
-if __name__ == "__main__":
-    bot.delete_webhook()
-    bot.set_webhook(url=f"tutiendaidao-production.up.railway.app/8642929480:AAH3oeIRu-NSYp5ulQdxf1NEUebZRIh5Z7E")
-    app.run(host="0.0.0.0", port=8000)
 
+if __name__ == "__main__":
+
+    bot.delete_webhook()
+
+    bot.set_webhook(
+        url=f"https://tutiendaidao-production.up.railway.app/{TOKEN}"
+    )
+
+    app.run(
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 8000))
+    )
 
 # ============================================================
 # NEW FILE (SAFE VERSION)
