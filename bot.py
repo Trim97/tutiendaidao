@@ -130,9 +130,12 @@ def ai_call(prompt, tokens=200):
 
         return r.output_text
 
-    except Exception as e:
-        print("AI ERROR:", e)
-        return None
+except Exception as e:
+    print("OPENAI ERROR:", str(e))
+    import traceback
+    traceback.print_exc()
+
+    reply = "Thiên cơ hỗn loạn... ta tạm thời không thể suy diễn."
 
 def breakthrough_story(old_level,new_level,realm):
 
