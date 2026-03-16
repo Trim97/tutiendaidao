@@ -440,20 +440,11 @@ def handle(update, context):
     user_text = update.message.text
 
     try:
-        response = client.chat.completions.create(
-            model="gpt-5-nano",
-            messages=[
-                {"role": "system", "content": "Ngươi là một hệ thống tu tiên cổ xưa, nói chuyện văn phong tiên hiệp."},
-                {"role": "user", "content": user_text}
-            ],
-            max_tokens=200
-        )
-
-        reply = response.choices[0].message.content
+        reply = ai_call(user_text)
 
     except Exception as e:
-        print("OPENAI ERROR:", e)
-        reply = "Thiên cơ hỗn loạn... ta tạm thời không thể suy diễn."
+        print("HANDLE ERROR:", e)
+        reply = "Thiên cơ hỗn loạn..."
 
     update.message.reply_text(reply)
 
