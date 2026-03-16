@@ -439,14 +439,10 @@ def handle(update, context):
         reply = response.choices[0].message.content
 
     except Exception as e:
-        print("OPENAI ERROR:", str(e))
-        import traceback
-        traceback.print_exc()
-
+        print("OPENAI ERROR:", e)
         reply = "Thiên cơ hỗn loạn... ta tạm thời không thể suy diễn."
 
     update.message.reply_text(reply)
-
 
 # 🔴 ROUTE NHẬN WEBHOOK TELEGRAM
 @app.route(f"/{TOKEN}", methods=["POST"])
