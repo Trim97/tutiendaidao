@@ -118,7 +118,6 @@ def get_realm(level):
 # =====================
 
 def ai_call(prompt, tokens=200):
-
     try:
 
         r = client.responses.create(
@@ -126,7 +125,9 @@ def ai_call(prompt, tokens=200):
             input=[
                 {
                     "role": "user",
-                    "content": prompt
+                    "content": [
+                        {"type": "text", "text": prompt}
+                    ]
                 }
             ],
             max_output_tokens=tokens
@@ -135,13 +136,19 @@ def ai_call(prompt, tokens=200):
         if r.output_text:
             return r.output_text
 
+        # fallback đọc thủ công
+        for item in r.output:
+            if item.type == "message":
+                for c in item.content:
+                    if c.type == "output_text":
+                        return c.text
+
         return "Thiên cơ vẫn chưa hiện..."
 
     except Exception as e:
         print("OPENAI ERROR:", e)
         import traceback
         traceback.print_exc()
-
         return "Thiên cơ hỗn loạn..."
 
 def breakthrough_story(old_level,new_level,realm):
