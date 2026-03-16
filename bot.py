@@ -127,7 +127,10 @@ def ai_call(prompt, tokens=120):
             max_output_tokens=tokens
         )
 
-        return r.output_text.strip()
+        print("FULL RESPONSE:")
+        print(r)
+
+        return r.output_text
 
     except Exception as e:
 
