@@ -421,8 +421,16 @@ scheduler.add_job(heavenly_warning,"interval",hours=3)
 
 scheduler.start()
 
-updater.start_polling()
+updater.start_polling(drop_pending_updates=True)
 updater.idle()
+
+while True:
+    try:
+        updater.start_polling(drop_pending_updates=True)
+        updater.idle()
+    except Exception as e:
+        print("BOT RESTART:", e)
+        time.sleep(5)
 
 
 # ============================================================
