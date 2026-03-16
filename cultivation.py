@@ -1,21 +1,48 @@
-import math
+from database import cursor, conn
 
-def xp_needed(player):
+def get_player():
 
-    level=player["level"]
-    A=player["A"]
+    cursor.execute("SELECT * FROM player WHERE id=1")
 
-    B=1.5+(level//50)*0.1
+    p = cursor.fetchone()
 
-    return int(A*(level**B))
-def level_up(player):
+    if not p:
 
-    need=xp_needed(player)
+        cursor.execute("""
+        INSERT INTO player VALUES(1,'Đạo Hữu',1,0,0,200,1.5)
+        """)
 
-    while player["xp"]>=need:
+        conn.commit()
 
-        player["xp"]-=need
-        player["level"]+=1
-        player["A"]+=10*player["level"]
+        return get_player()
 
-        need=xp_needed(player)
+    return p
+
+
+def add_xp(amount):
+
+    p = get_player()
+
+    level = p[2]
+    xp = p[3] + amount
+    A = p[5]
+    B = p[6]
+
+    need = int(A * (level ** B))
+
+    if xp >= need:
+
+        level += 1
+        xp = 0
+
+        A += 10 * level
+
+        if level % 50 == 0:
+            B += 0.1
+
+    cursor.execute(
+        "UPDATE player SET level=?,xp=?,A=?,B=? WHERE id=1",
+        (level, xp, A, B)
+    )
+
+    conn.commit()

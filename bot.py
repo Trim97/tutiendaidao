@@ -1,31 +1,62 @@
 from telegram.ext import ApplicationBuilder,MessageHandler,filters
+
 from config import TELEGRAM_TOKEN
-from database import init_db
 
-async def chat(update,context):
+from database import init_db,cursor,conn
 
-    text=update.message.text.lower()
+from ai_chat import chat
+from memory import save_memory
 
-    if "chạy" in text:
+from scheduler import nightly_report
 
-        await update.message.reply_text("✔ Nhiệm vụ chạy hoàn thành")
+async def handle(update,context):
 
-    elif "video" in text:
+    text=update.message.text
 
-        await update.message.reply_text("📹 Nhiệm vụ youtube hoàn thành")
+    chat_id=update.message.chat.id
 
-    else:
+    cursor.execute(
+        "INSERT OR REPLACE INTO settings VALUES('chat_id',?)",
+        (chat_id,)
+    )
 
-        await update.message.reply_text("Hệ thống đã ghi nhận lời nói của tu sĩ.")
+    conn.commit()
 
-async def main():
+    save_memory("user",text)
 
-    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    reply=chat(text)
 
-    await app.bot.delete_webhook(drop_pending_updates=True)
+    save_memory("assistant",reply)
 
-    app.add_handler(MessageHandler(filters.TEXT, chat))
+    await update.message.reply_text(reply)
+
+
+def main():
+
+    init_db()
+
+    app=ApplicationBuilder().token(
+        TELEGRAM_TOKEN
+    ).build()
+
+    app.add_handler(
+        MessageHandler(filters.TEXT,handle)
+    )
+
+    job_queue=app.job_queue
+
+    job_queue.run_daily(
+        nightly_report,
+        time={"hour":21,"minute":0}
+    )
 
     print("BOT RUNNING")
 
-    await app.run_polling()
+    app.run_polling(
+        drop_pending_updates=True
+    )
+
+
+if __name__=="__main__":
+
+    main()

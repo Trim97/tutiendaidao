@@ -1,38 +1,38 @@
-from youtube_api import get_channel_stats
-from youtube_analyzer import analyze_growth
-from ai_strategist import analyze_channel
-from memory_engine import save_cultivation,get_history
+from youtube_scanner import scan
+from cultivation import get_player
+from database import cursor
 
-async def daily_report(context):
+async def nightly_report(context):
 
-    bot=context.bot
+    xp,event=scan()
 
-    today=get_channel_stats()
+    p=get_player()
 
-    yesterday=context.bot_data.get("yt_yesterday")
+    cursor.execute(
+        "SELECT value FROM settings WHERE key='chat_id'"
+    )
 
-    if yesterday is None:
-        context.bot_data["yt_yesterday"]=today
+    row=cursor.fetchone()
+
+    if not row:
         return
 
-    growth=analyze_growth(today,yesterday)
-
-    history=await get_history(30)
-
-    analysis=analyze_channel(growth,history)
+    chat_id=row[0]
 
     msg=f"""
-🌙 Thiên cơ báo cáo
+📜 Báo cáo tu luyện
 
-Subscriber +{growth['sub_gain']}
-Views +{growth['view_gain']}
+⚔️ Level: {p[2]}
+✨ XP: {p[3]}
 
-📊 Phân tích chiến lược
-
-{analysis}
+🎥 XP YouTube hôm nay:
+{xp}
 """
 
-    await bot.send_message(context.bot_data["owner"],msg)
+    if event:
+        msg+=f"\n{event} xuất hiện!"
 
-    context.bot_data["yt_yesterday"]=today
-
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=msg
+    )

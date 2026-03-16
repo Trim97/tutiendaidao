@@ -1,37 +1,43 @@
-import aiosqlite
+import sqlite3
 
-DB="tutien.db"
+conn = sqlite3.connect("cultivation.db", check_same_thread=False)
 
-async def init_db():
+cursor = conn.cursor()
 
-    async with aiosqlite.connect(DB) as db:
+def init_db():
 
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS players(
-        id TEXT PRIMARY KEY,
-        xp INTEGER,
-        level INTEGER,
-        A INTEGER,
-        streak INTEGER
-        )
-        """)
-
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS cultivation_log(
-        date TEXT,
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS player(
+        id INTEGER PRIMARY KEY,
+        name TEXT,
         level INTEGER,
         xp INTEGER,
-        streak INTEGER
-        )
-        """)
+        streak INTEGER,
+        A REAL,
+        B REAL
+    )
+    """)
 
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS youtube_stats(
-        date TEXT,
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS memory(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        role TEXT,
+        message TEXT
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS youtube_stats(
         subs INTEGER,
         views INTEGER
-        )
-        """)
+    )
+    """)
 
-        await db.commit()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS settings(
+        key TEXT PRIMARY KEY,
+        value TEXT
+    )
+    """)
 
+    conn.commit()
