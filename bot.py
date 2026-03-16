@@ -1,62 +1,442 @@
-from telegram.ext import ApplicationBuilder,MessageHandler,filters
+import os
+import math
+import random
+import requests
+import psycopg2
 
-from config import TELEGRAM_TOKEN
+from apscheduler.schedulers.background import BackgroundScheduler
+from telegram.ext import Updater, MessageHandler, Filters
+from openai import OpenAI
 
-from database import init_db,cursor,conn
+# =====================
+# CONFIG
+# =====================
 
-from ai_chat import chat
-from memory import save_memory
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-from scheduler import nightly_report
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-async def handle(update,context):
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
+CHANNEL_ID = os.getenv("YOUTUBE_CHANNEL_ID")
 
-    text=update.message.text
+client = OpenAI(api_key=OPENAI_API_KEY)
 
-    chat_id=update.message.chat.id
+# =====================
+# DATABASE
+# =====================
 
-    cursor.execute(
-        "INSERT OR REPLACE INTO settings VALUES('chat_id',?)",
-        (chat_id,)
+conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+cur = conn.cursor()
+
+def init_db():
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS player(
+    chat_id TEXT PRIMARY KEY,
+    xp BIGINT,
+    level INT,
+    A FLOAT,
+    B FLOAT
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS quests(
+    chat_id TEXT,
+    quest TEXT,
+    done BOOLEAN,
+    streak INT
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS side_quests(
+    id SERIAL PRIMARY KEY,
+    chat_id TEXT,
+    quest TEXT,
+    done BOOLEAN
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS youtube_stats(
+    chat_id TEXT,
+    subs INT,
+    views INT
+    )
+    """)
+
+    conn.commit()
+
+init_db()
+
+# =====================
+# LEVEL SYSTEM
+# =====================
+
+def xp_needed(level,A,B):
+    return A*(level**B)
+
+def add_xp(chat_id,xp):
+
+    cur.execute(
+    "UPDATE player SET xp = xp + %s WHERE chat_id=%s",
+    (xp,chat_id)
     )
 
     conn.commit()
 
-    save_memory("user",text)
+# =====================
+# REALM SYSTEM
+# =====================
 
-    reply=chat(text)
+realms=[
+"Trúc Cơ","Kết Đan","Nguyên Anh","Hoá Thần",
+"Luyện Hư","Hợp Thể","Đại Thừa","Độ Kiếp",
+"Chân Tiên","Kim Tiên","Thái Ất Ngọc Tiên",
+"Đại La","Đạo Tổ","Thiên Đạo","Thiên Đế","Đại Đế"
+]
 
-    save_memory("assistant",reply)
+def get_realm(level):
 
-    await update.message.reply_text(reply)
+    if level<=100:
 
+        tầng = math.ceil(level/10)
+        return f"Luyện Khí tầng {tầng}"
 
-def main():
+    index=(level-101)//100
+    stage=(level-101)%100
 
-    init_db()
+    if stage<30:
+        phase="Sơ Kỳ"
+    elif stage<60:
+        phase="Trung Kỳ"
+    elif stage<90:
+        phase="Hậu Kỳ"
+    else:
+        phase="Đỉnh Phong"
 
-    app=ApplicationBuilder().token(
-        TELEGRAM_TOKEN
-    ).build()
+    return realms[index]+" "+phase
 
-    app.add_handler(
-        MessageHandler(filters.TEXT,handle)
+# =====================
+# CULTIVATION NARRATIVE
+# =====================
+
+def breakthrough_story(old_level,new_level,realm):
+
+    prompt=f"""
+Viết thông báo đột phá cảnh giới tiên hiệp.
+
+Level cũ {old_level}
+Level mới {new_level}
+Cảnh giới {realm}
+
+Phong cách cổ phong, 3 câu tối đa.
+"""
+
+    r=client.responses.create(
+        model="gpt-5-nano",
+        input=prompt,
+        max_output_tokens=80
     )
 
-    job_queue=app.job_queue
+    return r.output_text
 
-    job_queue.run_daily(
-        nightly_report,
-        time={"hour":21,"minute":0}
+def cultivation_poem(level,realm):
+
+    prompt=f"""
+Viết 2 câu thơ tiên hiệp.
+
+Level {level}
+Cảnh giới {realm}
+"""
+
+    r=client.responses.create(
+        model="gpt-5-nano",
+        input=prompt,
+        max_output_tokens=40
     )
 
-    print("BOT RUNNING")
+    return r.output_text
 
-    app.run_polling(
-        drop_pending_updates=True
+# =====================
+# LEVEL CHECK
+# =====================
+
+def check_level(chat_id,context=None):
+
+    cur.execute(
+    "SELECT xp,level,A,B FROM player WHERE chat_id=%s",
+    (chat_id,)
     )
 
+    xp,level,A,B = cur.fetchone()
 
-if __name__=="__main__":
+    need = xp_needed(level,A,B)
 
-    main()
+    if xp>=need:
+
+        old_level=level
+
+        level+=1
+        A += 10*level
+
+        if level%50==0:
+            B+=0.1
+
+        cur.execute(
+        "UPDATE player SET level=%s,A=%s,B=%s WHERE chat_id=%s",
+        (level,A,B,chat_id)
+        )
+
+        conn.commit()
+
+        realm=get_realm(level)
+
+        story=breakthrough_story(old_level,level,realm)
+
+        if context:
+            context.bot.send_message(chat_id=chat_id,text=story)
+
+# =====================
+# DAILY QUEST
+# =====================
+
+daily_quests=[
+"chạy",
+"tập bụng",
+"dọn dẹp nhà cửa",
+"làm video youtube",
+"đọc sách ở thư viện",
+"làm game roblox",
+"ngủ đúng giờ",
+"review ngày cũ"
+]
+
+def reset_daily():
+
+    cur.execute("DELETE FROM quests")
+
+    cur.execute("SELECT chat_id FROM player")
+
+    players=cur.fetchall()
+
+    for p in players:
+
+        for q in daily_quests:
+
+            cur.execute(
+            "INSERT INTO quests VALUES(%s,%s,false,0)",
+            (p[0],q)
+            )
+
+    conn.commit()
+
+# =====================
+# LLM QUEST PARSER
+# =====================
+
+def detect_quest(text):
+
+    prompt=f"""
+Danh sách quest:
+{daily_quests}
+
+User nói:
+{text}
+
+Nếu user hoàn thành quest nào
+trả đúng tên quest
+không thì trả NONE
+"""
+
+    r=client.responses.create(
+        model="gpt-5-nano",
+        input=prompt,
+        max_output_tokens=20
+    )
+
+    result=r.output_text.lower().strip()
+
+    if result in daily_quests:
+        return result
+
+    return None
+
+# =====================
+# AI CHAT
+# =====================
+
+def ai_chat(text):
+
+    prompt=f"""
+Bạn là hệ thống tu luyện tiên hiệp.
+
+Phong cách cổ phong.
+
+User:
+{text}
+"""
+
+    r=client.responses.create(
+        model="gpt-5-nano",
+        input=prompt,
+        max_output_tokens=120
+    )
+
+    return r.output_text
+
+# =====================
+# YOUTUBE SCAN
+# =====================
+
+def scan_youtube():
+
+    url=f"https://www.googleapis.com/youtube/v3/channels?part=statistics&id={CHANNEL_ID}&key={YOUTUBE_API_KEY}"
+
+    r=requests.get(url).json()
+
+    stats=r["items"][0]["statistics"]
+
+    subs=int(stats["subscriberCount"])
+    views=int(stats["viewCount"])
+
+    cur.execute("SELECT chat_id FROM player")
+    players=cur.fetchall()
+
+    for p in players:
+
+        cur.execute(
+        "SELECT subs,views FROM youtube_stats WHERE chat_id=%s",
+        (p[0],)
+        )
+
+        row=cur.fetchone()
+
+        if row:
+
+            old_sub,old_view=row
+
+            add_sub=subs-old_sub
+            add_view=views-old_view
+
+            xp=(add_sub*10)+(add_view*10)
+
+            add_xp(p[0],xp)
+
+            cur.execute(
+            "UPDATE youtube_stats SET subs=%s,views=%s WHERE chat_id=%s",
+            (subs,views,p[0])
+            )
+
+        else:
+
+            cur.execute(
+            "INSERT INTO youtube_stats VALUES(%s,%s,%s)",
+            (p[0],subs,views)
+            )
+
+    conn.commit()
+
+# =====================
+# THIÊN ĐẠO CẢNH BÁO
+# =====================
+
+def heavenly_warning(context):
+
+    cur.execute("SELECT chat_id FROM player")
+    players=cur.fetchall()
+
+    warnings=[
+    "Thiên đạo quan sát... hôm nay ngươi chưa tu luyện.",
+    "Đạo tâm nếu lười biếng, tu vi tất sẽ thụt lùi.",
+    "Linh khí trôi qua từng khắc, sao ngươi vẫn chưa hành công?",
+    "Thiên địa rộng lớn, kẻ chậm bước tất bị bỏ lại."
+    ]
+
+    for p in players:
+
+        msg=random.choice(warnings)
+
+        context.bot.send_message(chat_id=p[0],text=msg)
+
+# =====================
+# TELEGRAM MESSAGE
+# =====================
+
+def handle(update,context):
+
+    chat_id=str(update.message.chat_id)
+    text=update.message.text.lower()
+
+    cur.execute("SELECT * FROM player WHERE chat_id=%s",(chat_id,))
+    p=cur.fetchone()
+
+    if not p:
+
+        cur.execute(
+        "INSERT INTO player VALUES(%s,0,1,200,1.5)",
+        (chat_id,)
+        )
+
+        conn.commit()
+
+    # MONEY XP
+
+    if "đồng" in text or "vnđ" in text:
+
+        nums=[int(s) for s in text.split() if s.isdigit()]
+
+        if nums:
+
+            add_xp(chat_id,nums[0])
+            check_level(chat_id,context)
+
+    # QUEST PARSER
+
+    quest=detect_quest(text)
+
+    if quest:
+
+        cur.execute(
+        "UPDATE quests SET done=true WHERE chat_id=%s AND quest=%s",
+        (chat_id,quest)
+        )
+
+        conn.commit()
+
+    reply=ai_chat(text)
+
+    cur.execute("SELECT level FROM player WHERE chat_id=%s",(chat_id,))
+    level=cur.fetchone()[0]
+
+    realm=get_realm(level)
+
+    poem=cultivation_poem(level,realm)
+
+    update.message.reply_text(reply+"\n\n"+poem)
+
+# =====================
+# START BOT
+# =====================
+
+updater=Updater(TOKEN,use_context=True)
+
+dp=updater.dispatcher
+
+dp.add_handler(MessageHandler(Filters.text,handle))
+
+scheduler=BackgroundScheduler()
+
+scheduler.add_job(scan_youtube,"cron",hour=21)
+
+scheduler.add_job(reset_daily,"cron",hour=0)
+
+scheduler.add_job(heavenly_warning,"interval",hours=3)
+
+scheduler.start()
+
+updater.start_polling()
+
+updater.idle()
