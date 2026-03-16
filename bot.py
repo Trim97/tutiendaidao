@@ -27,6 +27,7 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 conn = psycopg2.connect(DATABASE_URL, sslmode="require")
 cur = conn.cursor()
+conn.autocommit = True
 
 
 def init_db():
@@ -370,18 +371,24 @@ Bạn là hệ thống tu luyện tiên hiệp.
 User: {text}
 """
 
-    reply=ai_call(prompt)
+    reply = ai_call(prompt)
 
-    cur.execute("SELECT level FROM player WHERE chat_id=%s",(chat_id,))
+if not reply:
+    reply = "Thiên cơ hỗn loạn... tạm thời không thể suy diễn."
 
-    level=cur.fetchone()[0]
+cur.execute("SELECT level FROM player WHERE chat_id=%s",(chat_id,))
+level = cur.fetchone()[0]
 
-    realm=get_realm(level)
+realm = get_realm(level)
 
-    poem=cultivation_poem(level,realm)
+poem = cultivation_poem(level,realm)
 
-    update.message.reply_text(reply+"\n\n"+poem)
+if not poem:
+    poem = "Tu đạo vô tận, đạo tâm bất diệt."
 
+message = reply + "\n\n" + poem
+
+update.message.reply_text(message)
 # =====================
 # BOT START
 # =====================
