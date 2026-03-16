@@ -419,9 +419,28 @@ app = Flask(__name__)
 dispatcher = Dispatcher(bot, None, use_context=True)
 
 def handle(update, context):
-    update.message.reply_text("Ta đã nghe ngươi nói.")
 
-dispatcher.add_handler(MessageHandler(Filters.text, handle))
+    user_text = update.message.text
+
+    try:
+
+        response = client.chat.completions.create(
+            model="gpt-5-nano",
+            messages=[
+                {"role": "system", "content": "Ngươi là một hệ thống tu tiên cổ xưa, nói chuyện văn phong tiên hiệp."},
+                {"role": "user", "content": user_text}
+            ],
+            max_tokens=200
+        )
+
+        reply = response.choices[0].message.content
+
+    except Exception as e:
+
+        print("OPENAI ERROR:", e)
+        reply = "Thiên cơ hỗn loạn... ta tạm thời không thể suy diễn."
+
+    update.message.reply_text(reply)
 
 
 # 🔴 ROUTE NHẬN WEBHOOK TELEGRAM
